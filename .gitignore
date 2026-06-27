@@ -1,6 +1,4 @@
-# Data files (too large for GitHub)
-data/raw/
-data/processed/
+
 
 # Model checkpoints
 models/
