@@ -57,3 +57,10 @@ climate_digital_twin/
 
 ## 👥 Team
 ISRO Hackathon 2026
+Team Odyssey
+
+Members:
+- Bikash Saren
+- Ritwik Mridha
+- Soumen Bera
+- Adhish Sadukhan
