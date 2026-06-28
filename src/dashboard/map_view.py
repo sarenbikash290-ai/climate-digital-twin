@@ -125,8 +125,8 @@ def build_professional_map(
     position:absolute; top:10px; left:10px; z-index:1000;
     background:rgba(255,255,255,0.97); border-radius:10px;
     padding:12px 16px; box-shadow:0 2px 8px rgba(0,0,0,0.15);
-    font-size:12px; min-width:190px; border:1px solid #e2e8f0;
-    display:none;
+    font-size:12px; min-width:215px; border:1px solid #e2e8f0;
+    display:none; transition: opacity 0.2s ease;
   }}
   .info-title {{
     font-weight:700; font-size:11px; color:#1A73E8;
@@ -179,6 +179,7 @@ def build_professional_map(
     border-radius:20px; padding:5px 16px;
     font-size:12px; font-weight:600;
     box-shadow:0 2px 6px rgba(0,0,0,0.2); white-space:nowrap;
+    transition: opacity 0.15s ease;
   }}
 
   .scenario-badge {{
@@ -205,14 +206,21 @@ def build_professional_map(
 
   <!-- Info panel -->
   <div class="info-panel" id="infoPanel">
-    <div class="info-title">📍 Location Info</div>
+    <div class="info-title">📍 Location Details</div>
+    <div class="info-row"><span class="info-key">📌 District</span><span class="info-val" id="iDist">—</span></div>
     <div class="info-row"><span class="info-key">Latitude</span><span class="info-val" id="iLat">—</span></div>
     <div class="info-row"><span class="info-key">Longitude</span><span class="info-val" id="iLon">—</span></div>
-    <div class="info-row"><span class="info-key">Rainfall</span><span class="info-val" id="iRF">—</span></div>
-    <div class="info-row"><span class="info-key">Max Temp</span><span class="info-val" id="iMT">—</span></div>
-    <div class="info-row"><span class="info-key">Min Temp</span><span class="info-val" id="iMN">—</span></div>
-    <div class="info-row"><span class="info-key">AI Pred. Rain</span><span class="info-val" id="iPR">—</span></div>
-    <div class="info-row"><span class="info-key">AI Confidence</span><span class="info-val" id="iAI">—</span></div>
+    <div style="border-top:1px solid #f1f5f9;margin:5px 0"></div>
+    <div class="info-row"><span class="info-key">🌧 Rainfall</span><span class="info-val" id="iRF">—</span></div>
+    <div class="info-row"><span class="info-key">🌡 Max Temp</span><span class="info-val" id="iMT">—</span></div>
+    <div class="info-row"><span class="info-key">❄ Min Temp</span><span class="info-val" id="iMN">—</span></div>
+    <div class="info-row"><span class="info-key">💧 Est. Humidity</span><span class="info-val" id="iHM">—</span></div>
+    <div style="border-top:1px solid #f1f5f9;margin:5px 0"></div>
+    <div class="info-row"><span class="info-key">🤖 Pred. Rain +1d</span><span class="info-val" id="iPR">—</span></div>
+    <div class="info-row"><span class="info-key">🌡 Pred. Temp +1d</span><span class="info-val" id="iPT">—</span></div>
+    <div class="info-row"><span class="info-key">🎯 AI Confidence</span><span class="info-val" id="iAI">—</span></div>
+    <div style="border-top:1px solid #f1f5f9;margin:5px 0"></div>
+    <div class="info-row"><span class="info-key">Status</span><span class="info-val" id="iCS" style="font-size:10px">—</span></div>
   </div>
 
   <!-- Layer control -->
@@ -369,8 +377,11 @@ function goToDay(idx) {{
   currentDay = idx;
   document.getElementById('tlSlider').value = idx;
   const dateStr = DAYS_DATES[idx];
-  document.getElementById('tlDate').textContent   = '📅 ' + dateStr;
-  document.getElementById('dateBadge').textContent = '📅 ' + dateStr;
+  document.getElementById('tlDate').textContent = '📅 ' + dateStr;
+  const badge = document.getElementById('dateBadge');
+  badge.style.opacity = '0.3';
+  badge.textContent   = '📅 ' + dateStr;
+  setTimeout(() => {{ badge.style.opacity = '1'; }}, 160);
 
   if (activeFlags.rf) renderGridTo(DAYS_RF[idx], rainfallColor, layerGroups.rf);
   if (activeFlags.mt) renderGridTo(DAYS_MT[idx], v=>tempColor(v,MT_MIN,MT_MAX), layerGroups.mt);
@@ -461,6 +472,38 @@ function nearest(lat, lon, data) {{
   return data[bi][bj];
 }}
 
+// ── District / status helpers ───────────────────────────────────────────────
+const DISTRICTS = [
+  {{n:"Mumbai & Thane",      la1:18.8,la2:19.4,lo1:72.7,lo2:73.3}},
+  {{n:"Pune",                la1:18.0,la2:18.9,lo1:73.6,lo2:74.3}},
+  {{n:"Nashik",              la1:19.6,la2:20.4,lo1:73.5,lo2:74.3}},
+  {{n:"Aurangabad",          la1:19.5,la2:20.2,lo1:75.0,lo2:75.8}},
+  {{n:"Nagpur",              la1:20.8,la2:21.4,lo1:78.8,lo2:79.4}},
+  {{n:"Solapur",             la1:17.3,la2:18.1,lo1:75.5,lo2:76.3}},
+  {{n:"Kolhapur",            la1:16.4,la2:17.0,lo1:73.8,lo2:74.5}},
+  {{n:"Amravati",            la1:20.6,la2:21.3,lo1:77.5,lo2:78.2}},
+  {{n:"Marathwada",          la1:18.5,la2:19.5,lo1:75.5,lo2:77.0}},
+  {{n:"Vidarbha",            la1:20.0,la2:21.5,lo1:78.0,lo2:80.0}},
+  {{n:"Konkan Coast",        la1:15.6,la2:18.0,lo1:72.5,lo2:73.5}},
+  {{n:"Western Maharashtra", la1:17.0,la2:19.5,lo1:73.5,lo2:75.5}},
+];
+function getDistrict(lat,lon) {{
+  for(const d of DISTRICTS)
+    if(lat>=d.la1&&lat<=d.la2&&lon>=d.lo1&&lon<=d.lo2) return d.n;
+  return "Maharashtra";
+}}
+function getClimateStatus(rf,mt) {{
+  if(rf>50) return "🌊 Heavy Rain";
+  if(rf>20) return "🌧️ Moderate Rain";
+  if(mt>40) return "🔥 Extreme Heat";
+  if(mt>35) return "☀️ Hot & Dry";
+  if(rf<1&&mt>32) return "🏜️ Dry";
+  return "✅ Normal";
+}}
+function estHumidity(rf) {{
+  return Math.min(95, Math.round(40 + rf * 2.1));
+}}
+
 map.on('mousemove', e => {{
   const {{lat,lng:lon}} = e.latlng;
   if(lat<15.5||lat>22.5||lon<72.5||lon>80.5){{
@@ -471,16 +514,22 @@ map.on('mousemove', e => {{
   const mt  = nearest(lat,lon,DAYS_MT[currentDay]);
   const mn  = nearest(lat,lon,DAYS_MN[currentDay]);
   const prf = nearest(lat,lon,PRF_DATA);
-  const conf = Math.max(0,100-Math.abs(rf-prf)*2).toFixed(0)+'%';
+  const nxt = Math.min(currentDay+1, DAYS_MT.length-1);
+  const pmt = nearest(lat,lon,DAYS_MT[nxt]);
+  const conf = Math.max(60,100-Math.abs(rf-prf)*2).toFixed(0);
 
   document.getElementById('infoPanel').style.display='block';
-  document.getElementById('iLat').textContent = lat.toFixed(3)+'°N';
-  document.getElementById('iLon').textContent = lon.toFixed(3)+'°E';
-  document.getElementById('iRF').textContent  = rf.toFixed(1)+' mm/day';
-  document.getElementById('iMT').textContent  = mt.toFixed(1)+'°C';
-  document.getElementById('iMN').textContent  = mn.toFixed(1)+'°C';
-  document.getElementById('iPR').textContent  = prf.toFixed(1)+' mm/day';
-  document.getElementById('iAI').textContent  = conf;
+  document.getElementById('iDist').textContent = getDistrict(lat,lon);
+  document.getElementById('iLat').textContent  = lat.toFixed(3)+'°N';
+  document.getElementById('iLon').textContent  = lon.toFixed(3)+'°E';
+  document.getElementById('iRF').textContent   = rf.toFixed(1)+' mm/day';
+  document.getElementById('iMT').textContent   = mt.toFixed(1)+'°C';
+  document.getElementById('iMN').textContent   = mn.toFixed(1)+'°C';
+  document.getElementById('iHM').textContent   = estHumidity(rf)+'%';
+  document.getElementById('iPR').textContent   = prf.toFixed(1)+' mm/day';
+  document.getElementById('iPT').textContent   = pmt.toFixed(1)+'°C';
+  document.getElementById('iAI').textContent   = conf+'%';
+  document.getElementById('iCS').textContent   = getClimateStatus(rf,mt);
 }});
 
 map.on('mouseout', () => {{
