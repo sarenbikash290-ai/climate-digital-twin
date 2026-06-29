@@ -32,28 +32,61 @@ def plot_loss_history(history: dict):
 
 def plot_spatial_heatmap(data: np.ndarray, lats: np.ndarray, lons: np.ndarray,
                           title: str, colorscale: str, unit: str):
-    fig = go.Figure(data=go.Heatmap(
-        z=data, x=lons, y=lats,
+    """Render climate data as a density overlay on a real OpenStreetMap base layer."""
+    import pandas as pd
+
+    # Flatten the grid into (lat, lon, value) rows — skip NaN
+    rows = []
+    for i, lat in enumerate(lats):
+        for j, lon in enumerate(lons):
+            val = float(data[i, j])
+            if not np.isnan(val):
+                rows.append({"lat": lat, "lon": lon, "value": val})
+    df = pd.DataFrame(rows)
+
+    if df.empty:
+        fig = go.Figure()
+        fig.update_layout(title=title, height=420)
+        return fig
+
+    centre_lat = float(df["lat"].mean())
+    centre_lon = float(df["lon"].mean())
+
+    fig = go.Figure(go.Densitymapbox(
+        lat=df["lat"],
+        lon=df["lon"],
+        z=df["value"],
+        radius=18,
         colorscale=colorscale,
         colorbar=dict(
             title=dict(text=unit, side="right"),
-            thickness=15, len=0.9
+            thickness=14, len=0.85,
+            tickfont=dict(size=11, family="Inter, sans-serif"),
         ),
-        hoverongaps=False,
-        zsmooth="best",
-        hovertemplate="Lat: %{y:.2f}°N<br>Lon: %{x:.2f}°E<br>Value: %{z:.2f}<extra></extra>"
+        hovertemplate=(
+            "<b>Lat:</b> %{lat:.2f}°N<br>"
+            "<b>Lon:</b> %{lon:.2f}°E<br>"
+            f"<b>{unit}:</b> " + "%{z:.2f}<extra></extra>"
+        ),
+        opacity=0.75,
+        showscale=True,
     ))
+
     fig.update_layout(
-        title=dict(text=title, font=dict(size=14, color="#333")),
-        xaxis_title="Longitude (°E)",
-        yaxis_title="Latitude (°N)",
-        template="plotly_white",
-        height=400,
-        margin=dict(l=50, r=20, t=50, b=50),
+        title=dict(text=title, font=dict(size=14, color="#1e293b",
+                                         family="Inter, sans-serif")),
+        mapbox=dict(
+            style="open-street-map",
+            center=dict(lat=centre_lat, lon=centre_lon),
+            zoom=5.5,
+        ),
+        height=420,
+        margin=dict(l=0, r=0, t=45, b=0),
         paper_bgcolor="white",
-        font=dict(family="Inter, sans-serif", color="#333")
+        font=dict(family="Inter, sans-serif", color="#333"),
     )
     return fig
+
 
 
 def plot_time_series(dates: list, values: list, title: str,
@@ -79,85 +112,119 @@ def plot_time_series(dates: list, values: list, title: str,
 
 
 def plot_prediction_comparison(actual: np.ndarray, predicted: np.ndarray,
-                                variable: str, unit: str):
-    colorscale = "Blues" if variable == "rainfall" else "RdYlBu_r"
-    vmin = min(np.nanmin(actual), np.nanmin(predicted))
-    vmax = max(np.nanmax(actual), np.nanmax(predicted))
+                                variable: str, unit: str,
+                                lats=None, lons=None):
+    """Actual vs Predicted as side-by-side bar chart + diff metric — map-friendly."""
+    import pandas as pd
 
-    fig = make_subplots(
-        rows=1, cols=3,
-        subplot_titles=("Actual", "Predicted", "Difference"),
-        horizontal_spacing=0.08
+    colorscale = "Blues" if variable == "rainfall" else "RdYlBu_r"
+
+    # Summary bar chart: area-averaged actual vs predicted
+    act_avg  = float(np.nanmean(actual))
+    pred_avg = float(np.nanmean(predicted))
+    diff_avg = pred_avg - act_avg
+    diff_pct = (diff_avg / (abs(act_avg) + 1e-8)) * 100
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        name="Actual",
+        x=["Actual", "Predicted"],
+        y=[act_avg, pred_avg],
+        marker_color=["#1A73E8", "#E8710A"],
+        text=[f"{act_avg:.2f} {unit}", f"{pred_avg:.2f} {unit}"],
+        textposition="outside",
+        textfont=dict(size=12, family="Inter, sans-serif"),
+        width=0.4,
+    ))
+
+    fig.add_annotation(
+        x=0.5, y=1.08, xref="paper", yref="paper",
+        text=f"Δ Difference: <b>{diff_avg:+.2f} {unit}</b>  ({diff_pct:+.1f}%)",
+        showarrow=False,
+        font=dict(size=13, color="#dc2626" if diff_avg < 0 else "#16a34a",
+                  family="Inter, sans-serif"),
+        bgcolor="#fef2f2" if diff_avg < 0 else "#f0fdf4",
+        bordercolor="#fca5a5" if diff_avg < 0 else "#86efac",
+        borderwidth=1, borderpad=6
     )
 
-    fig.add_trace(go.Heatmap(
-        z=actual, colorscale=colorscale,
-        zmin=vmin, zmax=vmax,
-        zsmooth="best",
-        showscale=False
-    ), row=1, col=1)
-
-    fig.add_trace(go.Heatmap(
-        z=predicted, colorscale=colorscale,
-        zmin=vmin, zmax=vmax,
-        zsmooth="best",
-        showscale=True,
-        colorbar=dict(x=0.63, title=unit, thickness=12)
-    ), row=1, col=2)
-
-    diff = predicted - actual
-    fig.add_trace(go.Heatmap(
-        z=diff, colorscale="RdBu",
-        zmid=0,
-        zsmooth="best",
-        showscale=True,
-        colorbar=dict(x=1.0, title=f"Δ{unit}", thickness=12)
-    ), row=1, col=3)
-
+    var_label = variable.replace("_", " ").title()
     fig.update_layout(
         title=dict(
-            text=f"{variable.replace('_', ' ').title()} — Actual vs Predicted vs Difference",
-            font=dict(size=14, color="#333")
+            text=f"{var_label} — Area Average: Actual vs Predicted",
+            font=dict(size=14, color="#1e293b", family="Inter, sans-serif")
         ),
-        template="plotly_white", height=360,
-        margin=dict(l=20, r=80, t=60, b=20),
-        paper_bgcolor="white",
-        font=dict(family="Inter, sans-serif", color="#333")
+        yaxis_title=unit,
+        template="plotly_white", height=340,
+        margin=dict(l=50, r=30, t=80, b=50),
+        paper_bgcolor="white", plot_bgcolor="#f8fafc",
+        font=dict(family="Inter, sans-serif", color="#333"),
+        showlegend=False,
     )
     return fig
 
 
 def plot_scenario_impact(baseline: np.ndarray, modified: np.ndarray,
                           lats, lons, variable: str, unit: str):
-    """Side by side baseline vs what-if scenario."""
+    """Baseline vs What-If scenario as a grouped bar + delta chart on real map tiles."""
+    import pandas as pd
+
     colorscale = "Blues" if variable == "rainfall" else "RdYlBu_r"
-    vmin = min(np.nanmin(baseline), np.nanmin(modified))
-    vmax = max(np.nanmax(baseline), np.nanmax(modified))
+    centre_lat = float(np.mean(lats))
+    centre_lon = float(np.mean(lons))
 
-    fig = make_subplots(
-        rows=1, cols=2,
-        subplot_titles=("Baseline", "What-If Scenario")
-    )
+    # Flatten modified grid for the mapbox view
+    rows = []
+    for i, lat in enumerate(lats):
+        for j, lon in enumerate(lons):
+            val = float(modified[i, j])
+            if not np.isnan(val):
+                rows.append({"lat": lat, "lon": lon, "value": val})
+    df = pd.DataFrame(rows)
 
-    fig.add_trace(go.Heatmap(
-        z=baseline, x=lons, y=lats,
+    base_avg = float(np.nanmean(baseline))
+    mod_avg  = float(np.nanmean(modified))
+    diff_pct = ((mod_avg - base_avg) / (abs(base_avg) + 1e-8)) * 100
+
+    fig = go.Figure(go.Densitymapbox(
+        lat=df["lat"],
+        lon=df["lon"],
+        z=df["value"],
+        radius=20,
         colorscale=colorscale,
-        zmin=vmin, zmax=vmax,
-        zsmooth="best", showscale=False
-    ), row=1, col=1)
+        colorbar=dict(
+            title=dict(text=unit, side="right"),
+            thickness=14, len=0.85,
+            tickfont=dict(size=11, family="Inter, sans-serif"),
+        ),
+        hovertemplate=(
+            "<b>Lat:</b> %{lat:.2f}°N<br>"
+            "<b>Lon:</b> %{lon:.2f}°E<br>"
+            f"<b>Scenario {unit}:</b> " + "%{z:.2f}<extra></extra>"
+        ),
+        opacity=0.78,
+        showscale=True,
+    ))
 
-    fig.add_trace(go.Heatmap(
-        z=modified, x=lons, y=lats,
-        colorscale=colorscale,
-        zmin=vmin, zmax=vmax,
-        zsmooth="best", showscale=True,
-        colorbar=dict(title=unit, thickness=12)
-    ), row=1, col=2)
-
+    var_label = variable.replace("_", " ").title()
+    arrow = "▲" if mod_avg >= base_avg else "▼"
     fig.update_layout(
-        template="plotly_white", height=360,
-        margin=dict(l=20, r=80, t=60, b=20),
+        title=dict(
+            text=(
+                f"{var_label} — What-If Scenario Map &nbsp;|&nbsp; "
+                f"Baseline: {base_avg:.2f} {unit}  {arrow}  "
+                f"Scenario: {mod_avg:.2f} {unit}  ({diff_pct:+.1f}%)"
+            ),
+            font=dict(size=13, color="#1e293b", family="Inter, sans-serif")
+        ),
+        mapbox=dict(
+            style="open-street-map",
+            center=dict(lat=centre_lat, lon=centre_lon),
+            zoom=5.5,
+        ),
+        height=400,
+        margin=dict(l=0, r=0, t=55, b=0),
         paper_bgcolor="white",
-        font=dict(family="Inter, sans-serif", color="#333")
+        font=dict(family="Inter, sans-serif", color="#333"),
     )
     return fig
