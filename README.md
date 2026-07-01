@@ -55,6 +55,9 @@ climate_digital_twin/
 - Streamlit, Plotly, Folium
 - IMD & ISRO national datasets
 
+## Run Dashboard
+streamlit run src/dashboard/app.py
+
 ## 👥 Team
 ISRO Hackathon 2026
 Team Odyssey

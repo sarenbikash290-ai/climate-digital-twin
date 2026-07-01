@@ -668,7 +668,11 @@ with tab1:
 
         with col_map:
             with st.container(border=True):
-                st.markdown("**🗺️ Spatial Distribution Map**")
+                st.markdown(
+    "<span style='color:#1A1C1E; font-weight:700; font-size:0.95rem;'>🗺️ Spatial Distribution Map</span>",
+    unsafe_allow_html=True
+)
+
                 fig_map = plot_spatial_heatmap(
                     current_map, lats, lons,
                     f"{variable} — {selected_date}", colorscale, unit
@@ -677,7 +681,10 @@ with tab1:
 
         with col_ts:
             with st.container(border=True):
-                st.markdown("**📈 30-Day Area Average**")
+                st.markdown(
+    "<span style='color:#1A1C1E; font-weight:700; font-size:0.95rem;'>📈 30-Day Area Average</span>",
+    unsafe_allow_html=True
+                )
                 s = max(0, day_idx - 15)
                 e = min(len(data), day_idx + 15)
                 ts_vals  = [float(np.nanmean(denormalize(data[i, var_idx], norm_stats[var_key])))
@@ -688,7 +695,10 @@ with tab1:
                 st.plotly_chart(fig_ts, use_container_width=True)
 
             with st.container(border=True):
-                st.markdown("**📊 Statistics**")
+                st.markdown(
+    "<span style='color:#1A1C1E; font-weight:700; font-size:0.95rem;'>📊 Statistics</span>",
+    unsafe_allow_html=True
+                )
                 st.markdown(f"""
                 | Metric | Value |
                 |--------|-------|
@@ -703,7 +713,11 @@ with tab1:
                     f"{var_key}_{selected_date}.csv", "text/csv")
 
         with st.container(border=True):
-            st.markdown("**🗺️ Professional Climate Map — Maharashtra Digital Twin**")
+            st.markdown(
+    "<span style='color:#1A1C1E; font-weight:700; font-size:0.95rem;'>🗺️ Professional Climate Map — Maharashtra Digital Twin</span>",
+    unsafe_allow_html=True
+            )
+
         from src.dashboard.map_view import build_professional_map
 
 
