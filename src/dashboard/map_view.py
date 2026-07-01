@@ -295,7 +295,7 @@ let   isPlaying  = false;
 
 // ── Color helpers ───────────────────────────────────────────────────────────
 function rainfallColor(v) {{
-  if (v <= 0.5) return null;
+  if (v <= 0.5) return [219,234,254,0.12]; // Contiguous faint blue instead of empty gaps
   if (v < 5)    return [219,234,254,0.45];
   if (v < 15)   return [147,197,253,0.60];
   if (v < 30)   return [59, 130,246,0.70];
@@ -342,34 +342,61 @@ L.polyline([
   }}).addTo(map);
 }});
 
-// ── Grid layer groups ───────────────────────────────────────────────────────
+// ── Grid layer groups (re-mapped to ImageOverlays for smooth canvas interpolation) ────
 const dlat = LATS.length>1 ? Math.abs(LATS[1]-LATS[0]) : 0.25;
-const dlon  = LONS.length>1 ? Math.abs(LONS[1]-LONS[0]) : 0.25;
+const dlon = LONS.length>1 ? Math.abs(LONS[1]-LONS[0]) : 0.25;
 
-const layerGroups = {{
-  rf: L.layerGroup().addTo(map),
-  mt: L.layerGroup(),
-  mn: L.layerGroup(),
-  pr: L.layerGroup()
-}};
+const activeOverlays = {{ rf: null, mt: null, mn: null, pr: null }};
 const activeFlags = {{ rf:true, mt:false, mn:false, pr:false }};
 
-function renderGridTo(data, colorFn, group) {{
-  group.clearLayers();
-  for (let i=0; i<LATS.length; i++) {{
-    for (let j=0; j<LONS.length; j++) {{
+function renderGridTo(data, colorFn, key) {{
+  // Clean up previous overlay of this key
+  if (activeOverlays[key]) {{
+    map.removeLayer(activeOverlays[key]);
+    activeOverlays[key] = null;
+  }}
+  if (!activeFlags[key]) return;
+
+  const width = LONS.length;
+  const height = LATS.length;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  const imgData = ctx.createImageData(width, height);
+
+  for (let i = 0; i < height; i++) {{
+    // Leaflet coords start south-to-north; Canvas Y starts top-to-bottom
+    const canvasY = height - 1 - i;
+    for (let j = 0; j < width; j++) {{
       const v = data[i][j];
       const c = colorFn(v);
-      if (!c) continue;
-      L.rectangle([
-        [LATS[i]-dlat/2, LONS[j]-dlon/2],
-        [LATS[i]+dlat/2, LONS[j]+dlon/2]
-      ], {{
-        fillColor:toRgba(c), fillOpacity:c[3],
-        stroke:false, interactive:false
-      }}).addTo(group);
+      const idx = (canvasY * width + j) * 4;
+      if (c) {{
+        imgData.data[idx]     = c[0]; // R
+        imgData.data[idx + 1] = c[1]; // G
+        imgData.data[idx + 2] = c[2]; // B
+        imgData.data[idx + 3] = Math.round(c[3] * 255); // A
+      }} else {{
+        imgData.data[idx + 3] = 0; // Transparent
+      }}
     }}
   }}
+  ctx.putImageData(imgData, 0, 0);
+
+  // Compute bounding box
+  const latMin = LATS[0] - dlat/2;
+  const latMax = LATS[height-1] + dlat/2;
+  const lonMin = LONS[0] - dlon/2;
+  const lonMax = LONS[width-1] + dlon/2;
+  const bounds = [[latMin, lonMin], [latMax, lonMax]];
+
+  const url = canvas.toDataURL();
+  activeOverlays[key] = L.imageOverlay(url, bounds, {{
+    opacity: 0.85,
+    interactive: false
+  }}).addTo(map);
 }}
 
 // ── Go to specific day ──────────────────────────────────────────────────────
@@ -383,10 +410,10 @@ function goToDay(idx) {{
   badge.textContent   = '📅 ' + dateStr;
   setTimeout(() => {{ badge.style.opacity = '1'; }}, 160);
 
-  if (activeFlags.rf) renderGridTo(DAYS_RF[idx], rainfallColor, layerGroups.rf);
-  if (activeFlags.mt) renderGridTo(DAYS_MT[idx], v=>tempColor(v,MT_MIN,MT_MAX), layerGroups.mt);
-  if (activeFlags.mn) renderGridTo(DAYS_MN[idx], v=>tempColor(v,MN_MIN,MN_MAX), layerGroups.mn);
-  if (activeFlags.pr) renderGridTo(PRF_DATA,      rainfallColor, layerGroups.pr);
+  if (activeFlags.rf) renderGridTo(DAYS_RF[idx], rainfallColor, 'rf');
+  if (activeFlags.mt) renderGridTo(DAYS_MT[idx], v=>tempColor(v,MT_MIN,MT_MAX), 'mt');
+  if (activeFlags.mn) renderGridTo(DAYS_MN[idx], v=>tempColor(v,MN_MIN,MN_MAX), 'mn');
+  if (activeFlags.pr) renderGridTo(PRF_DATA,      rainfallColor, 'pr');
 }}
 
 // Initial render
@@ -446,18 +473,20 @@ function toggleLayer(key) {{
   const cb = document.getElementById(cbIds[key]);
   activeFlags[key] = cb.checked;
   if (cb.checked) {{
-    map.addLayer(layerGroups[key]);
     renderGridTo(
       key==='rf' ? DAYS_RF[currentDay] :
       key==='mt' ? DAYS_MT[currentDay] :
       key==='mn' ? DAYS_MN[currentDay] : PRF_DATA,
       key==='mt' ? v=>tempColor(v,MT_MIN,MT_MAX) :
       key==='mn' ? v=>tempColor(v,MN_MIN,MN_MAX) : rainfallColor,
-      layerGroups[key]
+      key
     );
     document.getElementById('mapLegend').innerHTML = legends[key];
   }} else {{
-    map.removeLayer(layerGroups[key]);
+    if (activeOverlays[key]) {{
+      map.removeLayer(activeOverlays[key]);
+      activeOverlays[key] = null;
+    }}
   }}
 }}
 
